@@ -1,0 +1,131 @@
+#include <LiquidCrystal.h>
+
+// Define constants for pin numbers.
+const int LCD_RS = 12;
+const int LCD_EN = 11;
+const int LCD_D4 = 5;
+const int LCD_D5 = 4;
+const int LCD_D6 = 3;
+const int LCD_D7 = 2;
+const int MOISTURE_POWER_PIN = A0;
+const int MOISTURE_SIGNAL_PIN = A1;
+const int MOTOR_IN1 = 9;
+const int MOTOR_IN2 = 7;
+const int MOTOR_ENA = 8;
+const int LCD_CONTRAST_PIN = 6;
+const int LCD_CONTRAST = 75;
+
+// Define the threshold for an invalid or disconnected sensor.
+const int MAX_VALID_READING = 600;
+
+// Create LCD object.
+LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
+
+// Global variable to store moisture level.
+int moistureLevel = 0;
+
+void setup() {
+  // Initialize LCD.
+  lcd.begin(16, 2);
+  analogWrite(LCD_CONTRAST_PIN, LCD_CONTRAST);
+
+  // Initialize pin modes.
+  pinMode(MOISTURE_POWER_PIN, OUTPUT);  // Power pin for the moisture sensor.
+  pinMode(MOISTURE_SIGNAL_PIN, INPUT);  // Signal pin for the moisture sensor.
+  pinMode(MOTOR_IN1, OUTPUT);
+  pinMode(MOTOR_IN2, OUTPUT);
+  pinMode(MOTOR_ENA, OUTPUT);
+
+  Serial.begin(9600);  // Start serial communication.
+}
+
+void loop() {
+  // Display a welcome message on the LCD.
+  lcd.setCursor(0, 0);
+  lcd.print("Moisture Level:");
+
+  // Read moisture level.
+  moistureLevel = readMoistureLevel();
+
+  // Check if the sensor reading is valid.
+  if (moistureLevel <= MAX_VALID_READING) {
+    // Display moisture level on the LCD.
+    displayMoistureLevel(moistureLevel);
+
+    // Control the motor based on moisture level.
+    controlMotor(moistureLevel);
+  } else {
+    // Display "NIL" if the sensor reading is invalid.
+    lcd.setCursor(0, 1);
+    lcd.print("NIL            ");  // Clear the rest of the line after "NIL"
+    Serial.println("Sensor Error: NIL (Reading above 600 or disconnected)");
+
+    // Turn off the motor when the sensor is invalid or disconnected.
+    stopMotor();
+  }
+
+  // Wait for 1 second before taking another reading.
+  delay(1000);
+}
+
+int readMoistureLevel() {
+  // Power the moisture sensor.
+  digitalWrite(MOISTURE_POWER_PIN, HIGH);
+  delay(10);  // Wait for the sensor to stabilize.
+
+  // Read the moisture level from the sensor.
+  int level = analogRead(MOISTURE_SIGNAL_PIN);
+
+  // Turn off the sensor to prevent corrosion.
+  digitalWrite(MOISTURE_POWER_PIN, LOW);
+
+  return level;
+}
+
+void displayMoistureLevel(int level) {
+  // Set cursor to the second row, first column.
+  lcd.setCursor(0, 1);
+
+  // Clear only the second line to avoid flickering.
+  lcd.print("                ");  // Clears only the content, not the whole screen.
+
+  lcd.setCursor(0, 1);
+  lcd.print(level);
+
+  Serial.print("Moisture Level: ");
+  Serial.println(level);  // Send moisture level to the serial monitor.
+}
+
+void controlMotor(int moistureLevel) {
+  int speed;
+
+  if (moistureLevel < 100) {
+    speed = 600;  // Stop motor.
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, LOW);
+  } 
+  else if (moistureLevel <= 300) {
+    speed = 400 ;  // Low speed.
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);
+  } 
+  else if (moistureLevel <= 500) {
+    speed = 200;  // Medium speed.
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);
+  } 
+  else {
+    speed = 00;  // High speed.
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);
+  }
+
+  analogWrite(MOTOR_ENA, speed);  // Set the motor speed.
+}
+
+void stopMotor() {
+  // Function to turn off the motor.
+  digitalWrite(MOTOR_IN1, LOW);
+  digitalWrite(MOTOR_IN2, LOW);
+  analogWrite(MOTOR_ENA, 0);  // Set motor speed to 0.
+}
