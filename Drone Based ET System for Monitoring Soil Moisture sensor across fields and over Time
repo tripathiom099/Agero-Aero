@@ -1,0 +1,94 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+from datetime import datetime
+
+# Step 1: Load and Combine Multiple Datasets
+
+# List of file paths for all datasets
+file_paths = [
+    r'D:\sih\data\Daily_data_of_Soil_Moisture_during_January_2024.csv',
+    r'D:\sih\data\Daily_data_of_Soil_Moisture_during_February_2024.csv',
+    r'D:\sih\data\Daily_data_of_Soil_Moisture_during_March_2024.csv',
+    r'D:\sih\data\Daily_data_of_Soil_Moisture_during_April_2024.csv',
+    r'D:\sih\data\Daily_data_of_Soil_Moisture_during_May_2024 (1).csv',
+    r'D:\sih\data\Daily_data_of_Soil_Moisture_during_June_2024.csv',
+]
+
+# Combine all datasets into a single DataFrame
+combined_df = pd.concat((pd.read_csv(file) for file in file_paths), ignore_index=True)
+
+# Step 2: Data Preprocessing
+
+# Handling missing values in Avg_smlvl_at15cm by filling with the mean
+combined_df['Avg_smlvl_at15cm'] = combined_df['Avg_smlvl_at15cm'].fillna(combined_df['Avg_smlvl_at15cm'].mean())
+
+# Encoding categorical variables using Label Encoding
+label_encoders = {}
+for column in ['State', 'District', 'Agency_name']:
+    le = LabelEncoder()
+    combined_df[column] = le.fit_transform(combined_df[column])
+    label_encoders[column] = le
+
+# Feature selection: Choosing relevant columns for the model
+features = combined_df[['State', 'District', 'Year', 'Month', 'Agency_name']]
+target = combined_df['Avg_smlvl_at15cm']
+
+# Step 3: Train the Decision Tree Model
+
+# Splitting the dataset into training and testing sets (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
+
+# Initialize the DecisionTreeRegressor
+regressor = DecisionTreeRegressor(random_state=42)
+
+# Train the model on the training data
+regressor.fit(X_train, y_train)
+
+# Step 4: Predict Soil Moisture Levels for the Next 5 Months
+
+# Get the latest year and month from the combined dataset
+last_year = combined_df['Year'].max()
+last_month = combined_df[combined_df['Year'] == last_year]['Month'].max()
+
+# Generate future dates for the next 5 months
+future_dates = pd.date_range(start=datetime(last_year, last_month, 1), periods=5, freq='MS')
+
+# Create a DataFrame for future predictions
+future_df = []
+
+# Create all combinations of State, District, and Agency_name for future predictions
+for state in combined_df['State'].unique():
+    for district in combined_df['District'].unique():
+        for agency in combined_df['Agency_name'].unique():
+            for date in future_dates:
+                future_df.append({
+                    'State': state,
+                    'District': district,
+                    'Year': date.year,
+                    'Month': date.month,
+                    'Agency_name': agency
+                })
+
+future_df = pd.DataFrame(future_df)
+
+# Predict soil moisture for future data
+future_predictions = regressor.predict(future_df[['State', 'District', 'Year', 'Month', 'Agency_name']])
+
+# Add predictions to the future_df
+future_df['Avg_smlvl_at15cm_Predicted'] = future_predictions
+
+# Decode the encoded columns back to original for readability
+for column, le in label_encoders.items():
+    future_df[column] = le.inverse_transform(future_df[column].astype(int))
+
+# Step 5: Save the Predictions to a CSV File
+
+output_file_path = r'D:\sih\data\Soil_Moisture_Predictions_Next_5_Months.csv'
+future_df.to_csv(output_file_path, index=False)
+
+# Display the future predictions
+print(future_df)
